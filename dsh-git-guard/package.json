@@ -1,0 +1,21 @@
+{
+  "name": "dsh-git-guard",
+  "version": "2.0.0",
+  "description": "Intercept git push (deny) and git commit (ask for user approval) issued via the bash tool, on the tools/pre-execute waterfall",
+  "type": "module",
+  "main": "index.ts",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}

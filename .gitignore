@@ -1,0 +1,11 @@
+# 默认忽略所有文件和目录
+/*
+
+# 但保留 .gitignore 自身
+!/.gitignore
+
+# 只允许这些目录纳入 git 管理
+!/dsh-fullwidth-chat/
+!/dsh-git-guard/
+!/dsh-new-session-command/
+!AGENTS.md

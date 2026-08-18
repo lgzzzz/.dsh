@@ -1,0 +1,7 @@
+# Local web bundle patch for dsh-new-session-command.
+# Registers the browser roster row so lib/client.js is loaded by the web shell
+# (same mechanism as dsh-fullwidth-chat). The host half (/new command) is
+# mounted separately in the agent preset's agent.cordis.yml — see README.md.
+- insert:
+    - id: new-session-command
+      name: dsh-new-session-command

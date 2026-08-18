@@ -1,0 +1,26 @@
+{
+  "name": "dsh-new-session-command",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local plugin: /new creates a new session like the New Session button; Esc stops all of the current session's interactions.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
