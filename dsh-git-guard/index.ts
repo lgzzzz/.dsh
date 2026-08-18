@@ -55,7 +55,7 @@ const GIT_FLAGS_WITH_VALUE = new Set(['-C', '--git-dir', '--work-tree', '-c'])
 const POLICY: Record<string, (subcommand: string) => PreToolDecision> = {
   push: () => ({
     kind: 'deny',
-    reason: 'git push 被 Git Guard 拦截。请通过 GUI 或其他渠道推送。',
+    reason: 'git push 被 Git Guard 拦截。',
   }),
   commit: () => ({
     kind: 'ask',
