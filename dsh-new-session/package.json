@@ -1,8 +1,8 @@
 {
-  "name": "dsh-new-session-command",
+  "name": "dsh-new-session",
   "version": "1.0.0",
   "private": true,
-  "description": "Local plugin: /new creates a new session like the New Session button; Esc stops all of the current session's interactions.",
+  "description": "Local persistent plugin: adds a /new slash command that creates a new blank session and jumps to it, exactly like the New Session button.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

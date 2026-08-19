@@ -7,7 +7,7 @@
 # 只允许这些目录纳入 git 管理
 !/dsh-fullwidth-chat/
 !/dsh-git-guard/
-!/dsh-new-session-command/
+!/dsh-new-session/
 !/dsh-kbd-nav-focus/
 !AGENTS.md
 !doc
