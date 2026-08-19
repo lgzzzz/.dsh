@@ -1,7 +1,7 @@
-# dsh-new-session-command 的 web bundle 补丁。
-# 声明本插件的挂载行,通过 dsh.profile.bundles 自动挂载到 web profile:
-# 宿主半部(/new 命令)在 agent preset 的 agent.cordis.yml 挂载,客户端半部
-# 由包内 dsh.client.platform=web + immediately 注册进浏览器 roster。
+# Local web bundle patch for dsh-new-session-command.
+# Registers the browser roster row so lib/client.js is loaded by the web shell
+# (same mechanism as dsh-fullwidth-chat). The host half (/new command) is
+# mounted separately in the agent preset's agent.cordis.yml — see README.md.
 - insert:
     - id: dsh-new-session-command
       name: dsh-new-session-command
