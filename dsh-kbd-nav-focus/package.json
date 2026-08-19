@@ -2,7 +2,7 @@
   "name": "dsh-kbd-nav-focus",
   "version": "1.0.0",
   "private": true,
-  "description": "本地持久化插件（浏览器半部）：Alt+Shift 进入自由移动焦点，方向键移动、Enter 左键点击且焦点停留原地、Esc 回输入框；起点为侧边栏当前会话。",
+  "description": "本地持久化插件（浏览器半部）：Alt+Shift 进入自由移动焦点，方向键移动、任意字母键左键点击且焦点停留原地；导航模式下 Esc 退出导航且事件被消费，非导航模式下 Esc 停止当前运行中的会话（整合自 dsh-esc-stop）；起点为侧边栏当前会话。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
