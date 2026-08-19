@@ -1,13 +1,12 @@
 /**
- * dsh-kbd-nav-focus — 键盘焦点导航 + Esc 停止生成（浏览器半部）。
+ * dsh-kbd-nav-focus — 键盘焦点导航（浏览器半部）。
  *
  * - Alt+Shift（按一次）：进入 / 退出自由移动焦点状态（闩锁，无需按住）。
  * - ↑↓←→：按几何方向移动焦点；上下方向严格同列（水平重叠硬过滤，列内走完不移动），
  *   左右方向允许斜向移动。
  * - 任意字母键（a–z / A–Z）：对当前高亮元素执行鼠标左键点击，点击后焦点停留原地（不跳走）。
- * - Esc：**导航模式下**退出并把焦点送回当前会话输入框（事件被消费，不会触发停止生成）；
- *   **非导航模式下**停止当前运行中的会话（整合自 dsh-esc-stop，仅 running 时调用 cancel）。
- * - 空格：拦截，防止误触发原生激活。
+ * - 任何非字母、非方向键（含 Esc / Enter / 空格 / Tab 等）：退出光标移动模式并把焦点
+ *   送回当前会话输入框（事件被消费，不触发其他行为）。
  * - 进入导航时，起点固定为侧边栏当前选中的会话行（aria-selected="true"）。
  *
  * 本文件是 TypeScript 源码：由 scripts/build-client.mjs 用 tsc 编译为 CommonJS 并
@@ -18,8 +17,6 @@
 export interface NavContext {
   /** 注册一个带清理回调的副作用；返回的清理函数在插件停止/卸载时被调用。 */
   effect(callback: () => void | (() => void)): void
-  /** 从 Cordis 客户端取服务（本插件用到 'sessions'，用于 Esc 停止生成）。 */
-  get(key: string): any
 }
 
 export const name = 'dsh-kbd-nav-focus'
@@ -304,35 +301,7 @@ function onFocusIn(e: FocusEvent): void {
   }
 }
 
-/**
- * 停止当前运行中的会话（整合自 dsh-esc-stop）。
- *
- * 与 UI 上“停止生成”按钮走同一条路径（`sessions.binding(id).session.cancel()`），
- * 仅在 `snapshot.running === true` 时才动手；取消失败静默吞掉。队列中未完成的
- * 消息保持不动（由 Host 在取消静默后按 FIFO 续跑）。
- */
-function stopRunningSession(ctx: NavContext): void {
-  if (!ctx || typeof ctx.get !== 'function') return
-  const sessions = ctx.get('sessions')
-  if (!sessions) return
-  const list = sessions.list
-  if (!list || typeof list.getSnapshot !== 'function') return
-  const current = list.getSnapshot().current
-  if (!current) return
-  const binding = sessions.binding(current)
-  if (!binding || !binding.session) return
-  const session = binding.session
-  let snap: { running?: boolean } | null = null
-  try {
-    snap = session.getSnapshot()
-  } catch (err) {
-    return
-  }
-  if (!snap || snap.running !== true) return
-  session.cancel().catch(function () {})
-}
-
-function onKeyDown(e: KeyboardEvent, ctx: NavContext): void {
+function onKeyDown(e: KeyboardEvent): void {
   const k = e.key
   if ((k === 'Alt' || k === 'Shift') && e.altKey && e.shiftKey) {
     e.preventDefault()
@@ -344,31 +313,23 @@ function onKeyDown(e: KeyboardEvent, ctx: NavContext): void {
     }
     return
   }
-  if (active) {
-    if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight') {
-      e.preventDefault()
-      e.stopPropagation()
-      move(k.slice(5).toLowerCase() as Dir)
-    } else if (/^[a-zA-Z]$/.test(k)) {
-      e.preventDefault()
-      e.stopPropagation()
-      if (e.repeat) return
-      leftClick()
-    } else if (k === 'Escape') {
-      e.preventDefault()
-      e.stopPropagation()
-      exitMode()
-      focusComposer()
-    } else if (k === ' ') {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-    return
-  }
-  // 非导航模式：Esc → 停止当前运行中的会话（原 dsh-esc-stop 功能）。
-  // 刻意不 preventDefault / stopPropagation，保留弹层关闭、IME 取消等其他 Esc 用途。
-  if (k === 'Escape') {
-    stopRunningSession(ctx)
+  if (!active) return
+  if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight') {
+    e.preventDefault()
+    e.stopPropagation()
+    move(k.slice(5).toLowerCase() as Dir)
+  } else if (/^[a-zA-Z]$/.test(k)) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.repeat) return
+    leftClick()
+  } else {
+    // 任何非字母、非方向键（含 Esc / Enter / 空格 / Tab 等）→ 退出光标移动模式，
+    // 并把焦点送回当前会话输入框；事件被消费，不触发其他行为。
+    e.preventDefault()
+    e.stopPropagation()
+    exitMode()
+    focusComposer()
   }
 }
 
@@ -389,13 +350,12 @@ export function apply(ctx: NavContext): void {
     tag.dataset.plugin = 'dsh-kbd-nav-focus'
     tag.textContent = '.' + RING + '{ outline: 2px solid #4f8cff !important; outline-offset: 2px; border-radius: 4px; }'
     document.head.appendChild(tag)
-    const handleKeyDown = (e: KeyboardEvent) => onKeyDown(e, ctx)
-    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('mousedown', onMouseDown, true)
     document.addEventListener('focusin', onFocusIn, true)
     return () => {
       tag.remove()
-      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('mousedown', onMouseDown, true)
       document.removeEventListener('focusin', onFocusIn, true)
       exitMode()
