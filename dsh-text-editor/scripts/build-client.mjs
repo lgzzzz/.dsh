@@ -1,20 +1,24 @@
 /**
- * 构建浏览器半部：
- * 1) 用 tsc 把 src/client.ts 编译为 CommonJS（到 .build/）
- * 2) 把编译产物包进 window.__ModuleLoader__.load({ id, factory }) 写回 lib/client.js
- * 3) 清理 .build
+ * 构建浏览器半部（产物：lib/client.js —— 单文件自包含 bundle）。
  *
- * 浏览器不跑 Node Type Stripping，因此必须产出纯 JS 的 lib/client.js。
+ * 步骤：
+ * 1) 用 esbuild 把 src/client.ts 连同其相对 import 的模块打包成单文件
+ *    （bundle: true）；仅 react 声明为 external（由 DSH ModuleLoader 的
+ *    模块表提供，不重复打包）。
+ * 2) 把产物包进 window.__ModuleLoader__.load({ id, factory }) 写回 lib/client.js
+ *
+ * 为什么必须打包成单文件：浏览器不跑 Node Type Stripping，且 DSH 的
+ * ModuleLoader 只按模块 id（external，如 react / 其他插件）解析 require，
+ * 不支持相对路径——拆多文件的源码必须在此合并回一份自包含产物。
  */
-import { execSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } from 'node:fs'
+import { buildSync } from 'esbuild'
+import { writeFileSync, mkdirSync, cpSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const loaderId = 'dsh-text-editor'
 const outFile = join(root, 'lib', 'client.js')
-const buildDir = join(root, '.build')
 
 // 铺 Monaco 发行版到 vendor/monaco：优先用 node_modules 里 monaco-editor 的
 // min/vs（npm 依赖，仓库不存 13MB）；本地已有 vendor 则跳过。
@@ -33,12 +37,17 @@ if (!existsSync(join(monacoVendor, 'loader.js'))) {
   console.log('vendored monaco → ' + monacoVendor)
 }
 
-rmSync(buildDir, { recursive: true, force: true })
-mkdirSync(buildDir, { recursive: true })
-
-execSync('tsc -p tsconfig.build.json', { cwd: root, stdio: 'inherit', shell: true })
-
-const compiled = readFileSync(join(buildDir, 'client.js'), 'utf8')
+const result = buildSync({
+  entryPoints: [join(root, 'src', 'client.ts')],
+  bundle: true,
+  platform: 'browser',
+  format: 'cjs',
+  target: 'es2019',
+  // react 来自 DSH ModuleLoader 的模块表（package.json 的 dsh.client.external）。
+  external: ['react'],
+  write: false,
+})
+const compiled = result.outputFiles[0].text
 const wrapped =
   'window.__ModuleLoader__.load({ id: ' + JSON.stringify(loaderId) + ", factory: (require) => {\n" +
   'var module = { exports: {} }; var exports = module.exports;\n' +
@@ -46,5 +55,4 @@ const wrapped =
   'return module.exports; } });\n'
 
 writeFileSync(outFile, wrapped)
-rmSync(buildDir, { recursive: true, force: true })
-console.log('built ' + outFile)
+console.log(`built ${outFile}（esbuild 打包，${compiled.length} 字节）`)

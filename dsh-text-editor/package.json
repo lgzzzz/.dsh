@@ -4,7 +4,6 @@
   "private": true,
   "description": "In-app Monaco-based text editor: open produced-file links (deliverables row) and read/write/edit tool-card file links in a dedicated DSH tab (文件) with a close button. Host half (index.ts) registers read/write/Monaco routes; browser half (src/client.ts → lib/client.js) registers the conversation.view tab and intercepts file-link clicks.",
   "type": "module",
-  "main": "index.ts",
   "exports": {
     ".": {
       "default": "./index.ts"
@@ -29,12 +28,13 @@
   "scripts": {
     "build": "node scripts/build-client.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "node --check lib/client.js && node --check index.ts"
+    "check": "node --check lib/client.js && node --check index.ts && node --check host/read.ts && node --check host/write.ts && node --check host/monaco.ts && node --check host/http.ts && node --check host/types.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@types/node": "^24.13.3",
     "@types/react": "^18.3.31",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {

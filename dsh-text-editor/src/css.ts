@@ -1,0 +1,22 @@
+/**
+ * 编辑器样式。与 DSH 明暗主题的 CSS 变量对齐，带浅色回退值。
+ */
+export const CSS = [
+  '.dsh-te-root{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#e6e6e6);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.5;}',
+  '.dsh-te-empty{justify-content:center;align-items:center;}',
+  '.dsh-te-toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.25));background:var(--dsw-alias-bg-layer-1,#252526);flex:none;}',
+  '.dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;}',
+  '.dsh-te-status{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;}',
+  '.dsh-te-status-error{color:var(--dsw-alias-state-error-primary,#f48771);}',
+  '.dsh-te-save{margin-left:auto;border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;}',
+  '.dsh-te-save:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}',
+  '.dsh-te-save:disabled{opacity:.5;cursor:default;}',
+  '.dsh-te-tab{display:inline-flex;align-items:center;gap:6px;}',
+  '.dsh-te-tab-label{white-space:nowrap;}',
+  '.dsh-te-tab-close{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;font-size:13px;line-height:1;color:var(--dsw-alias-label-secondary,#9d9d9d);cursor:pointer;user-select:none;}',
+  '.dsh-te-tab-close:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.25));color:var(--dsw-alias-label-primary,#fff);}',
+  '.dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}',
+  '.dsh-te-monaco{flex:1;min-height:0;position:relative;}',
+  '.dsh-te-monaco-host{position:absolute;inset:0;}',
+  '.dsh-te-note{padding:12px 16px;color:var(--dsw-alias-label-secondary,#9d9d9d);}',
+].join('\n')
