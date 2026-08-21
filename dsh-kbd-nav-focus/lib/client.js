@@ -4,13 +4,33 @@ var module = { exports: {} }; var exports = module.exports;
 /**
  * dsh-kbd-nav-focus — 键盘焦点导航（浏览器半部）。
  *
- * - Alt+Shift（按一次）：进入 / 退出自由移动焦点状态（闩锁，无需按住）。
+ * - Alt+Shift：进入自由移动焦点状态；**已在该状态时再次按 Alt+Shift 只把光标重置回
+ *   进入模式时的起点**（侧边栏当前选中的会话行），不会退出。**只有 S 键在触发会话选择
+ *   后才会退出该状态**（退出时把焦点送回输入框）。
  * - ↑↓←→：按几何方向移动焦点；上下方向严格同列（水平重叠硬过滤，列内走完不移动），
- *   左右方向允许斜向移动。
- * - 任意字母键（a–z / A–Z）：对当前高亮元素执行鼠标左键点击，点击后焦点停留原地（不跳走）。
- * - 任何非字母、非方向键（含 Esc / Enter / 空格 / Tab 等）：退出光标移动模式并把焦点
- *   送回当前会话输入框（事件被消费，不触发其他行为）。
+ *   左右方向允许斜向移动。**输入框（textarea/input/contenteditable/role=textbox 等）
+ *   不在移动的可选路径内**——光标移动不会落到输入框上（输入框由 S 退出时主动聚焦）。
+ * - C：对当前高亮元素执行鼠标左键点击，点击后焦点停留原地（不跳走）。若点击改变了
+ *   布局（例如展开会话列表、删除/归档某项导致锚点被位移或移除），会按“点击前的屏幕
+ *   坐标”在下一帧重新锚定光标到最近的可聚焦元素——展开场景下光标会落到新展开会话块
+ *   的开头，继续按方向键即可逐个走完，不会被跳过。
+ * - S：select —— 只对会话列表中的会话（[role="treeitem"][aria-selected]）生效：
+ *   切换至光标所在的会话，然后把焦点送回输入框；光标不在会话上时无动作。
+ * - 其它字母键（除 C/S 外）以及非字母、非方向键（含 Esc / Enter / 空格 / Tab 等）：
+ *   均未绑定动作，忽略（停留在导航模式），事件被消费不触发其他行为。
  * - 进入导航时，起点固定为侧边栏当前选中的会话行（aria-selected="true"）。
+ *
+ * 滚动策略（可滚动 UI 内移动焦点）：
+ * - **优先**在当前可滚动容器内就近选点：光标不会提前跳出当前 UI 跳到别的面板，
+ *   选中的元素若在视口外，scrollIntoView 会自动滚动容器把它带进视野，从而能把
+ *   焦点移动到 UI 内任意位置。
+ * - 当方向键到达当前可滚动容器的内容尽头（该方向上容器内再无可聚焦元素）时，
+ *   先把容器向该方向滚动一整页；若滚动后出现新的可聚焦元素（例如惰性/懒加载
+ *   渲染的内容），光标落到新元素上；若滚动后仍无新元素，则复原滚动位置。
+ * - 容器内该方向确实没有更多元素时，**允许跳出当前 UI**，改为在整页范围内就近
+ *   选择下一个元素（可以把焦点移出列表、移到其它面板）。
+ * - 上下方向以**纵向实际溢出**的容器为界、左右方向以**横向实际溢出**的容器为界
+ *   （`overflow-y:auto` 的列表不会被误当作横向边界）；无滚动容器时以文档滚动为兜底。
  *
  * 本文件是 TypeScript 源码：由 scripts/build-client.mjs 用 tsc 编译为 CommonJS 并
  * 包进 `window.__ModuleLoader__.load(...)` 后写入 lib/client.js 供 Web 加载。
@@ -75,6 +95,18 @@ function isEditable(el) {
         el.tagName === 'INPUT' ||
         el.getAttribute('contenteditable') === 'true');
 }
+/** 输入类元素（文本输入框 / 可编辑区）：导航模式下方向键移动不把光标落到这些元素上。 */
+function isInputLike(el) {
+    if (!el)
+        return false;
+    const t = el.tagName;
+    if (t === 'TEXTAREA' || t === 'INPUT')
+        return true;
+    const role = el.getAttribute('role');
+    if (role === 'textbox' || role === 'searchbox' || role === 'combobox')
+        return true;
+    return el.getAttribute('contenteditable') === 'true';
+}
 function removeRing() {
     if (target) {
         target.classList.remove(RING);
@@ -108,6 +140,17 @@ function exitMode() {
     active = false;
     removeRing();
 }
+/**
+ * 重置光标位置：已处于导航模式时按 Alt+Shift 触发，把光标移回进入模式时的起点
+ * （侧边栏当前选中的会话行，回退 class*="selected"）。不改变 active / remembered，
+ * 也不退出导航模式；找不到起点时保持当前位置不动。
+ */
+function resetMode() {
+    const start = document.querySelector('[role="treeitem"][aria-selected="true"]') ||
+        document.querySelector('[role="treeitem"][class*="selected"]');
+    if (start)
+        goto(start);
+}
 function isVisible(el) {
     if (el.closest && el.closest('[inert]'))
         return false;
@@ -123,6 +166,10 @@ function focusables() {
     const nodes = document.querySelectorAll(SELECTOR);
     const out = [];
     for (let i = 0; i < nodes.length; i++) {
+        // 输入框（textarea/input/contenteditable/role=textbox 等）不进导航移动的可选路径，
+        // 光标移动不会落到输入框上；输入框仍可通过 S 的 focusComposer 由插件主动聚焦。
+        if (isInputLike(nodes[i]))
+            continue;
         if (isVisible(nodes[i]))
             out.push(nodes[i]);
     }
@@ -131,36 +178,111 @@ function focusables() {
 function rectOf(el) {
     return el.getBoundingClientRect();
 }
-/** 从当前高亮目标出发，按方向就近选择下一个可聚焦目标。 */
-function pick(dir) {
-    const items = focusables();
-    let cur = target && document.contains(target) ? target : null;
-    if (!cur) {
-        const ae = document.activeElement;
-        if (ae && ae !== document.body)
-            cur = ae;
-    }
-    if (!cur) {
-        // 无当前目标：取离视口中心最近者作为起点。
-        const vw = document.documentElement.clientWidth;
-        const vh = document.documentElement.clientHeight;
-        let best = null;
-        let bestD = Infinity;
-        for (const el of items) {
-            const r = rectOf(el);
-            const d = Math.hypot(r.left + r.width / 2 - vw / 2, r.top + r.height / 2 - vh / 2);
-            if (d < bestD) {
-                bestD = d;
-                best = el;
-            }
+/** 当前高亮目标；失效时回退到活动元素，都没有则 null。 */
+function currentTarget() {
+    if (target && document.contains(target))
+        return target;
+    const ae = document.activeElement;
+    if (ae && ae !== document.body)
+        return ae;
+    return null;
+}
+/**
+ * 找到元素在指定轴向上的可滚动容器。只有该方向**实际溢出**的祖先才算：
+ * 例如 `overflow-y:auto` 的纵向列表，其 `overflow-x` 会被 CSS 计算成 `auto`
+ * 但并无横向溢出，不应把它当作横向 UI 边界（否则左右方向也会被锁在列表里）。
+ * 找不到则返回 null（表示文档级滚动）。
+ */
+function scrollContainerOf(el, axis) {
+    let node = el.parentElement;
+    while (node && node !== document.documentElement) {
+        const cs = getComputedStyle(node);
+        const ov = axis === 'y' ? cs.overflowY : cs.overflowX;
+        if (ov === 'auto' || ov === 'scroll' || ov === 'overlay' || ov === 'hidden') {
+            const overflowing = axis === 'y'
+                ? node.scrollHeight > node.clientHeight
+                : node.scrollWidth > node.clientWidth;
+            if (overflowing)
+                return node;
         }
-        return best;
+        node = node.parentElement;
     }
+    return null;
+}
+/** 读取容器（null=文档）在 axis 上的滚动位置。 */
+function scrollPos(sc, axis) {
+    if (!sc)
+        return axis === 'y' ? window.scrollY : window.scrollX;
+    return axis === 'y' ? sc.scrollTop : sc.scrollLeft;
+}
+/** 设置容器（null=文档）在 axis 上的滚动位置。 */
+function setScrollPos(sc, axis, v) {
+    if (!sc) {
+        if (axis === 'y')
+            window.scrollTo(window.scrollX, v);
+        else
+            window.scrollTo(v, window.scrollY);
+    }
+    else if (axis === 'y') {
+        sc.scrollTop = v;
+    }
+    else {
+        sc.scrollLeft = v;
+    }
+}
+/** 沿 dir 把容器（null=文档）向该方向滚动一整页；返回是否真的发生了滚动。 */
+function scrollPage(sc, dir, axis) {
+    const size = axis === 'y'
+        ? (sc ? sc.clientHeight : window.innerHeight)
+        : (sc ? sc.clientWidth : window.innerWidth);
+    const delta = dir === 'down' || dir === 'right' ? size : -size;
+    const before = scrollPos(sc, axis);
+    setScrollPos(sc, axis, before + delta);
+    return scrollPos(sc, axis) !== before;
+}
+/** 把焦点/高亮移动到目标元素（preventScroll 聚焦后 scrollIntoView 带进视野）。 */
+function goto(el) {
+    ensureFocusable(el);
+    removeRing();
+    target = el;
+    try {
+        el.focus({ preventScroll: true });
+    }
+    catch (err) {
+        return;
+    }
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    el.classList.add(RING);
+}
+/** 无当前目标时的兜底：取离视口中心最近的可聚焦元素作为起点。 */
+function nearestToViewportCenter(items) {
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    let best = null;
+    let bestD = Infinity;
+    for (const el of items) {
+        const r = rectOf(el);
+        const d = Math.hypot(r.left + r.width / 2 - vw / 2, r.top + r.height / 2 - vh / 2);
+        if (d < bestD) {
+            bestD = d;
+            best = el;
+        }
+    }
+    return best;
+}
+/**
+ * 从当前高亮目标出发，在 scope（可滚动容器，null=整页）内按方向就近选择下一个
+ * 可聚焦目标；scope 之外的候选一律忽略，避免光标跳出当前可滚动 UI。
+ */
+function pick(dir, scope, cur) {
+    const items = focusables();
     const cr = rectOf(cur);
     let best = null;
     let bestScore = Infinity;
     for (const el of items) {
         if (el === cur)
+            continue;
+        if (scope && !scope.contains(el))
             continue;
         const r = rectOf(el);
         let score;
@@ -208,20 +330,38 @@ function pick(dir) {
     return best;
 }
 function move(dir) {
-    const el = pick(dir);
+    const cur = currentTarget();
+    if (!cur) {
+        // 无当前目标：从视口中心最近者起步（保持原有兜底）。
+        const start = nearestToViewportCenter(focusables());
+        if (start)
+            goto(start);
+        return;
+    }
+    const axis = dir === 'left' || dir === 'right' ? 'x' : 'y';
+    const scope = scrollContainerOf(cur, axis);
+    // 1) 优先在当前可滚动 UI 内就近选择：光标不会提前跳出当前 UI，
+    //    视口外的目标由 goto 里的 scrollIntoView 滚动容器带进视野，
+    //    从而能把焦点移到 UI 内任意位置。
+    let el = pick(dir, scope, cur);
+    // 2) 该方向在容器内已走尽：先把容器向该方向滚动一整页，看滚动后是否出现
+    //    新内容（如惰性渲染）；没有则复原滚动位置。
+    if (!el && scope) {
+        const before = scrollPos(scope, axis);
+        if (scrollPage(scope, dir, axis)) {
+            el = pick(dir, scope, cur);
+            if (!el)
+                setScrollPos(scope, axis, before);
+        }
+    }
+    // 3) 容器内该方向确实没有更多元素：允许跳出当前 UI，在整页范围内就近选择，
+    //    从而可以把焦点移到 UI 之外 / 其它面板（不再被锁在列表内）。
+    if (!el) {
+        el = pick(dir, null, cur);
+    }
     if (!el)
         return;
-    ensureFocusable(el);
-    removeRing();
-    target = el;
-    try {
-        el.focus({ preventScroll: true });
-    }
-    catch (err) {
-        return;
-    }
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    el.classList.add(RING);
+    goto(el);
 }
 function closestFocusable(el) {
     let node = el;
@@ -232,10 +372,53 @@ function closestFocusable(el) {
     }
     return null;
 }
-function leftClick() {
-    const el = target && document.contains(target) ? target : document.activeElement;
-    if (!el || el === document.body)
-        return;
+/**
+ * 点击后按“点击前的屏幕坐标”重新锚定光标。点击可能改变布局（例如点击“展开其余 N 个
+ * 会话”会在按钮上方插入一批新会话行，把锚点按钮挤到展开块底部；或点击删除/归档把
+ * 锚点元素移除）。此时若继续按方向键，会从被位移/移除的锚点出发、跳过新插入的内容。
+ * 做法：等下一帧（React 等框架已提交 DOM）后，若原锚点已明显位移或消失，就把光标
+ * 移到离点击前坐标最近的可聚焦元素上（展开场景下正好落在新会话块的开头）。
+ */
+function reanchorAfterLayout(x, y, prefer) {
+    requestAnimationFrame(() => {
+        if (!active)
+            return;
+        // 原锚点仍在且几乎没动 → 布局没变，保持现状。
+        if (prefer && prefer.isConnected) {
+            const pr = rectOf(prefer);
+            const px = pr.left + pr.width / 2;
+            const py = pr.top + pr.height / 2;
+            if (Math.hypot(px - x, py - y) < 8)
+                return;
+        }
+        // 锚点被位移/移除 → 把光标移到离点击位置最近的可聚焦元素上。
+        let best = null;
+        let bestD = Infinity;
+        for (const el of focusables()) {
+            const r = rectOf(el);
+            const d = Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y);
+            if (d < bestD) {
+                bestD = d;
+                best = el;
+            }
+        }
+        if (!best)
+            return;
+        removeRing();
+        ensureFocusable(best);
+        target = best;
+        try {
+            best.focus({ preventScroll: true });
+        }
+        catch (err) {
+            return;
+        }
+        best.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        best.classList.add(RING);
+    });
+}
+/** 对指定元素执行鼠标左键点击（mousedown/mouseup/click），点击后焦点停留原地。 */
+function clickElement(el) {
     const r = rectOf(el);
     const x = r.left + r.width / 2;
     const y = r.top + r.height / 2;
@@ -249,6 +432,14 @@ function leftClick() {
         el.focus({ preventScroll: true });
         el.classList.add(RING);
     }
+    // 点击可能改变布局：等 DOM 提交后按点击前的坐标重新锚定。
+    reanchorAfterLayout(x, y, el);
+}
+function leftClick() {
+    const el = target && document.contains(target) ? target : document.activeElement;
+    if (!el || el === document.body)
+        return;
+    clickElement(el);
 }
 function focusComposer() {
     if (remembered && remembered.isConnected && isEditable(remembered) && isVisible(remembered)) {
@@ -314,7 +505,8 @@ function onKeyDown(e) {
         e.preventDefault();
         e.stopPropagation();
         if (active) {
-            exitMode();
+            // 已处于导航模式：不退出，仅把光标重置回起点（侧边栏当前选中会话行）。
+            resetMode();
         }
         else {
             enterMode();
@@ -328,20 +520,32 @@ function onKeyDown(e) {
         e.stopPropagation();
         move(k.slice(5).toLowerCase());
     }
-    else if (/^[a-zA-Z]$/.test(k)) {
+    else if (k === 'c' || k === 'C') {
+        // C：对当前高亮元素执行鼠标左键点击（按住不重复点击）。
         e.preventDefault();
         e.stopPropagation();
         if (e.repeat)
             return;
         leftClick();
     }
-    else {
-        // 任何非字母、非方向键（含 Esc / Enter / 空格 / Tab 等）→ 退出光标移动模式，
-        // 并把焦点送回当前会话输入框；事件被消费，不触发其他行为。
+    else if (k === 's' || k === 'S') {
+        // S：select —— 只对会话列表中的会话生效。光标在会话行（[role=treeitem][aria-selected]）
+        // 上时，切换至该会话，然后把焦点移到输入框；不在会话上则无动作（忽略）。
         e.preventDefault();
         e.stopPropagation();
-        exitMode();
-        focusComposer();
+        const el = target && document.contains(target) ? target : document.activeElement;
+        const row = el && el !== document.body ? el.closest('[role="treeitem"][aria-selected]') : null;
+        if (row) {
+            clickElement(row);
+            exitMode();
+            focusComposer();
+        }
+    }
+    else {
+        // 其它键（含其它字母键，以及 Esc / Enter / 空格 / Tab 等非字母、非方向键）：
+        // 均未绑定动作，忽略（停留在导航模式），事件被消费避免触发浏览器/页面默认行为。
+        e.preventDefault();
+        e.stopPropagation();
     }
 }
 function onMouseDown(e) {
@@ -353,6 +557,10 @@ function onMouseDown(e) {
         ensureFocusable(el);
         el.classList.add(RING);
         target = el;
+        // 记录点击前的坐标：真实 click 可能改变布局（如展开会话列表），
+        // 等其提交后按该坐标重新锚定，避免锚点被挤到展开块底部而跳过新内容。
+        const r = rectOf(el);
+        reanchorAfterLayout(r.left + r.width / 2, r.top + r.height / 2, el);
     }
 }
 function apply(ctx) {
