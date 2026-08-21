@@ -1,0 +1,11 @@
+# dsh-text-editor 的 git 忽略规则。
+# 遵循仓库约定（参考 dsh-kbd-nav-focus/.gitignore）：node_modules 与构建中间目录不入库。
+
+# 依赖与中间产物
+node_modules/
+.build/
+*.log
+
+# Monaco 发行版：由 monaco-editor npm 依赖铺出（npm run build 时自动拷贝到
+# vendor/monaco），不入库以保持仓库轻量。需要离线时可执行 npm run build 重建。
+vendor/monaco/

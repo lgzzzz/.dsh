@@ -1,0 +1,24 @@
+{
+  // 只做类型检查（npm run typecheck），不产出任何文件。
+  // index.ts 由 Node 22 Type Stripping 直接加载；src/client.ts 由
+  // tsconfig.build.json 编译为 CommonJS 写入 lib/client.js。
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["esnext", "dom", "dom.iterable"],
+
+    "noEmit": true,
+
+    // 强制可擦除语法与显式 `import type`，与 Node Type Stripping 一致
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "lib", "vendor", ".build"]
+}

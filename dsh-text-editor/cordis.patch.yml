@@ -1,0 +1,10 @@
+# dsh-text-editor 的 web bundle 补丁。
+# 声明本插件的挂载行，通过 dsh.profile.bundles 自动挂载到 web profile：
+# 宿主半部（lib/index.js，ESM）注册 /dsh-text-editor/read 读取路由；
+# 浏览器半部（lib/client.js，dsh.client.platform=web + immediately）注册
+# “文件”conversation.view tab 并拦截产物链接点击。
+# 宿主半部硬依赖 webServer（HTTP 路由）与 fs（沙箱读取）。
+- insert:
+    - id: dsh-text-editor
+      name: dsh-text-editor
+      inject: [webServer, fs]
